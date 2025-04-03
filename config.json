@@ -1,0 +1,11 @@
+{
+    "bot_token": "YOUR_BOT_TOKEN",
+    "chat_id": "YOUR_CHAT_ID",
+    "check_interval_sec": 30,
+    "hosts": [
+      "8.8.8.8",
+      "yandex.ru",
+      "example.com"
+    ]
+  }
+  
