@@ -1,6 +1,6 @@
 {
     "bot_token": "bot_token",
-    "chat_id": "YOUR_CHAT_ID",
+    "chat_id": "Bot_chat_id",
     "check_interval_sec": 30,
     "hosts": [
       "192.168.1.1",
