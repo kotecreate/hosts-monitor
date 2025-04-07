@@ -11,7 +11,7 @@ var logger *log.Logger
 func initLogger() {
 	logFile, err := os.OpenFile("monitor.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Fatalf("❌ Не удалось открыть лог-файл: %v", err)
+		log.Fatalf("❌ Failed to open log file: %v", err)
 	}
 
 	multi := io.MultiWriter(os.Stdout, logFile)

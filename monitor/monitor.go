@@ -8,8 +8,11 @@ import (
 	"net/http"
 	"net/url"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
+
+	"golang.org/x/text/encoding/charmap"
 )
 
 type Config struct {
@@ -25,10 +28,10 @@ func Start(configFile string) {
 	initLogger()
 
 	if err := loadConfig(configFile); err != nil {
-		logFatal("Ошибка загрузки конфигурации: %v", err)
+		logFatal("Error loading configuration: %v", err)
 	}
 
-	logInfo("📡 Мониторинг запущен. Хосты: %v", config.Hosts)
+	logInfo("📡 Monitoring started. Hosts: %v", config.Hosts)
 
 	for {
 		for _, host := range config.Hosts {
@@ -48,27 +51,48 @@ func loadConfig(filename string) error {
 
 func pingHost(host string) {
 	var out bytes.Buffer
-	cmd := exec.Command("ping", "-c", "3", "-W", "2", host) // Linux/macOS
+	var cmd *exec.Cmd
+
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("ping", "-n", "3", "-w", "2000", host)
+	} else {
+		cmd = exec.Command("ping", "-c", "3", "-W", "2", host)
+	}
+
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-
 	err := cmd.Run()
+
 	output := out.String()
+	if runtime.GOOS == "windows" {
+		output = decodeCP866ToUTF8(output)
+	}
 
 	if err != nil {
-		msg := fmt.Sprintf("🔴 Хост недоступен: %s\n%s", host, output)
+		msg := fmt.Sprintf("🔴 Host unavailable: %s\n%s", host, output)
 		logError(msg)
 		sendTelegramMessage(msg)
 		return
 	}
 
-	if strings.Contains(output, "0 received") || strings.Contains(output, "100% packet loss") {
-		msg := fmt.Sprintf("🔴 Потеря пакетов при пинге: %s\n%s", host, output)
+	if strings.Contains(output, "0 received") ||
+		strings.Contains(output, "100% packet loss") ||
+		strings.Contains(output, "Превышен интервал ожидания") {
+		msg := fmt.Sprintf("🔴 Packet loss during ping: %s\n%s", host, output)
 		logError(msg)
 		sendTelegramMessage(msg)
 	} else {
 		logInfo("✅ %s OK\n%s", host, output)
 	}
+}
+
+func decodeCP866ToUTF8(input string) string {
+	decoder := charmap.CodePage866.NewDecoder()
+	utf8Str, err := decoder.String(input)
+	if err != nil {
+		return input
+	}
+	return utf8Str
 }
 
 func sendTelegramMessage(text string) {
@@ -79,7 +103,7 @@ func sendTelegramMessage(text string) {
 
 	req, err := http.NewRequest("POST", endpoint, strings.NewReader(data.Encode()))
 	if err != nil {
-		logError("Ошибка создания запроса в Telegram: %v", err)
+		logError("Error creating request in Telegram: %v", err)
 		return
 	}
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -87,7 +111,7 @@ func sendTelegramMessage(text string) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		logError("Ошибка отправки сообщения в Telegram: %v", err)
+		logError("Error sending message in Telegram: %v", err)
 		return
 	}
 	defer resp.Body.Close()
