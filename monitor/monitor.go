@@ -1,15 +1,15 @@
 package monitor
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os/exec"
 	"strings"
 	"time"
-
-	"github.com/go-ping/ping"
 )
 
 type Config struct {
@@ -47,30 +47,27 @@ func loadConfig(filename string) error {
 }
 
 func pingHost(host string) {
-	pinger, err := ping.NewPinger(host)
+	var out bytes.Buffer
+	cmd := exec.Command("ping", "-c", "3", "-W", "2", host) // Linux/macOS
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+
+	err := cmd.Run()
+	output := out.String()
+
 	if err != nil {
-		logError("Ошибка создания пинга для %s: %v", host, err)
-		return
-	}
-
-	pinger.Count = 3
-	pinger.Timeout = 2 * time.Second
-	pinger.SetPrivileged(true)
-
-	if err = pinger.Run(); err != nil {
-		msg := fmt.Sprintf("❌ Пинг не удался: %s — %v", host, err)
+		msg := fmt.Sprintf("🔴 Хост недоступен: %s\n%s", host, output)
 		logError(msg)
 		sendTelegramMessage(msg)
 		return
 	}
 
-	stats := pinger.Statistics()
-	if stats.PacketsRecv == 0 {
-		msg := fmt.Sprintf("🔴 Хост недоступен: %s (0 пакетов)", host)
+	if strings.Contains(output, "0 received") || strings.Contains(output, "100% packet loss") {
+		msg := fmt.Sprintf("🔴 Потеря пакетов при пинге: %s\n%s", host, output)
 		logError(msg)
 		sendTelegramMessage(msg)
 	} else {
-		logInfo("✅ %s OK (%d/%d пакетов)", host, stats.PacketsRecv, stats.PacketsSent)
+		logInfo("✅ %s OK\n%s", host, output)
 	}
 }
 
